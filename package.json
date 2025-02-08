@@ -9,6 +9,6 @@
     "socket.io": "^4.8.1"
   },
   "scripts": {
-    "server": "nodemon index.js"
+    "dev": "nodemon backend/index.js"
   }
 }
