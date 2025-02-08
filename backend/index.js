@@ -50,9 +50,7 @@ app.post('/send-email', async (req, res) => {
   }
 });
 
-server.listen(process.env.PORT, () => {
-  console.log(`Server is running on port ${process.env.PORT}`);
-});
+
 
 io.on('connection', (socket) => {
   console.log('User connected:', socket.id);
@@ -114,4 +112,8 @@ function handleUserLeaving(socket, roomId, userId) {
   socket.to(roomId).emit('user-left', { userId });
   socket.leave(roomId);
 }
+
+server.listen(process.env.PORT, () => {
+  console.log(`Server is running on port ${process.env.PORT}`);
+});
 
