@@ -64,7 +64,6 @@ io.on('connection', (socket) => {
  
     socket.to(roomId).emit('user-joined', { userId, socketId: socket.id });
     
-    // Send list of existing users to the new participant
     const existingUsers = Array.from(rooms.get(roomId)).filter(id => id !== userId);
     console.log('Existing users in room:', existingUsers);
     socket.emit('existing-users', existingUsers);
