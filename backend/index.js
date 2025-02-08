@@ -110,8 +110,6 @@ function handleUserLeaving(socket, roomId, userId) {
   socket.to(roomId).emit('user-left', { userId });
   socket.leave(roomId);
 }
-
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+server.listen(process.env.PORT, () => {
+  console.log(`Server is running on port ${process.env.PORT}`);
 });
