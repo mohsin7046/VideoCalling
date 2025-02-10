@@ -11,8 +11,8 @@ const app = express();
 const server = createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: "*",
-  }
+    origin: '*',
+  },
 });
 
 app.use(cors());
@@ -21,11 +21,11 @@ app.use(express.json());
 const rooms = new Map();
 
 const transporter = nodemailer.createTransport({
-  service: 'gmail', 
+  service: 'gmail',
   auth: {
-    user: process.env.USER, 
-    pass: process.env.PASS 
-  }
+    user: process.env.USER,
+    pass: process.env.PASS,
+  },
 });
 
 app.post('/send-email', async (req, res) => {
@@ -37,10 +37,10 @@ app.post('/send-email', async (req, res) => {
 
   try {
     await transporter.sendMail({
-      from: process.env.USER, 
+      from: process.env.USER,
       to,
       subject: 'Meeting Invitation',
-      text: `You have been invited to a meeting. Join using this link: ${link}`
+      text: `You have been invited to a meeting. Join using this link: ${link}`,
     });
 
     res.status(200).json({ message: 'Email sent successfully' });
@@ -50,39 +50,39 @@ app.post('/send-email', async (req, res) => {
   }
 });
 
-
-
 io.on('connection', (socket) => {
   console.log('User connected:', socket.id);
 
   socket.on('join-room', ({ roomId, userId }) => {
     console.log(`User ${userId} joining room ${roomId}`);
     socket.join(roomId);
-    
+
     if (!rooms.has(roomId)) {
       rooms.set(roomId, new Set());
     }
     rooms.get(roomId).add(userId);
- 
+
     socket.to(roomId).emit('user-joined', { userId, socketId: socket.id });
-    
-    const existingUsers = Array.from(rooms.get(roomId)).filter(id => id !== userId);
-    console.log('Existing users in room:', existingUsers);
+
+    const existingUsers = Array.from(rooms.get(roomId)).filter(
+      (id) => id !== userId
+    );
     socket.emit('existing-users', existingUsers);
   });
 
+  socket.on('send-message', ({ roomId, message }) => {
+    io.to(roomId).emit('receive-message', message);
+  });
+
   socket.on('offer', ({ offer, to, from }) => {
-    console.log(`Forwarding offer from ${from} to ${to}`);
     socket.to(to).emit('offer', { offer, from });
   });
 
   socket.on('answer', ({ answer, to, from }) => {
-    console.log(`Forwarding answer from ${from} to ${to}`);
     socket.to(to).emit('answer', { answer, from });
   });
 
   socket.on('ice-candidate', ({ candidate, to, from }) => {
-    console.log(`Forwarding ICE candidate from ${from} to ${to}`);
     socket.to(to).emit('ice-candidate', { candidate, from });
   });
 
@@ -92,7 +92,6 @@ io.on('connection', (socket) => {
 
   socket.on('disconnect', () => {
     console.log('User disconnected:', socket.id);
-    // Find and leave all rooms this socket was in
     rooms.forEach((users, roomId) => {
       if (users.has(socket.id)) {
         handleUserLeaving(socket, roomId, socket.id);
@@ -116,4 +115,3 @@ function handleUserLeaving(socket, roomId, userId) {
 server.listen(process.env.PORT, () => {
   console.log(`Server is running on port ${process.env.PORT}`);
 });
-

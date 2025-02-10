@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { FaMicrophone, FaMicrophoneSlash, FaVideo, FaVideoSlash, FaPhone, FaLink, FaPaperPlane } from 'react-icons/fa';
+import { FaMicrophone, FaMicrophoneSlash, FaVideo, FaVideoSlash, FaPhone, FaLink, FaPaperPlane, FaEllipsisV } from 'react-icons/fa';
 import { io } from 'socket.io-client';
 
 const socket = io(import.meta.env.VITE_PORT);
@@ -16,9 +16,11 @@ const configuration = {
 const Room = () => {
   const { roomId } = useParams();
   const navigate = useNavigate();
-  const [isMuted, setIsMuted] = useState(false);
-  const [isVideoOff, setIsVideoOff] = useState(false);
-  const [email, setEmail] = useState('');
+  const [isMuted, setIsMuted] = useState(JSON.parse(localStorage.getItem('isMuted')) || false);
+  const [isVideoOff, setIsVideoOff] = useState(JSON.parse(localStorage.getItem('isVideoOff')) || false);
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [chatMessage, setChatMessage] = useState('');
+  const [chatMessages, setChatMessages] = useState([]);
   const localVideoRef = useRef();
   const [remoteStreams, setRemoteStreams] = useState(new Map());
   const peerConnections = useRef(new Map());
@@ -57,6 +59,7 @@ const Room = () => {
         if (localVideoRef.current) {
           localVideoRef.current.srcObject = stream;
         }
+        toggleLocalStreamTracks();
 
         socket.emit('join-room', { roomId, userId: socket.id });
 
@@ -126,38 +129,12 @@ const Room = () => {
     };
   }, [roomId]);
 
-  const copyLink = () => {
-    const meetingLink = `${window.location.origin}/room/${roomId}`;
-    navigator.clipboard.writeText(meetingLink).then(() => {
-      alert('Meeting link copied to clipboard!');
-    });
-  };
-
-  const sendEmail = async () => {
-    if (!email) {
-      alert('Please enter an email address.');
-      return;
-    }
-
-    const meetingLink = `${window.location.origin}/room/${roomId}`;
-    try {
-      await fetch(`${import.meta.env.VITE_PORT}/send-email`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ to: email, link: meetingLink }),
-      });
-      alert('Meeting link sent successfully!');
-    } catch (error) {
-      console.error('Error sending email:', error);
-      alert('Failed to send meeting link.');
-    }
-  };
-
   const toggleAudio = () => {
     if (localStreamRef.current) {
       const audioTrack = localStreamRef.current.getAudioTracks()[0];
       audioTrack.enabled = !audioTrack.enabled;
       setIsMuted(!audioTrack.enabled);
+      localStorage.setItem('isMuted', JSON.stringify(!audioTrack.enabled));
     }
   };
 
@@ -166,6 +143,16 @@ const Room = () => {
       const videoTrack = localStreamRef.current.getVideoTracks()[0];
       videoTrack.enabled = !videoTrack.enabled;
       setIsVideoOff(!videoTrack.enabled);
+      localStorage.setItem('isVideoOff', JSON.stringify(!videoTrack.enabled));
+    }
+  };
+
+  const toggleLocalStreamTracks = () => {
+    if (localStreamRef.current) {
+      const audioTrack = localStreamRef.current.getAudioTracks()[0];
+      const videoTrack = localStreamRef.current.getVideoTracks()[0];
+      audioTrack.enabled = !isMuted;
+      videoTrack.enabled = !isVideoOff;
     }
   };
 
@@ -176,62 +163,122 @@ const Room = () => {
     navigate('/');
   };
 
+  const handleSendMessage = () => {
+    const name = document.getElementById('chatname').textContent;
+    if (chatMessage.trim()) {
+      const newMessage = { user: name, message: chatMessage };
+      setChatMessages(prevMessages => [...prevMessages, newMessage]);
+      socket.emit('send-message', { roomId, message: newMessage });
+      setChatMessage('');
+    }
+  };
+
+  useEffect(() => {
+    socket.on('receive-message', (message) => {
+      setChatMessages(prevMessages => prevMessages.some(msg => msg.message === message.message) ? prevMessages : [...prevMessages, message]);
+    });
+  }, []);
+
   return (
-    <div className="h-screen bg-gray-900 flex flex-col">
-      <div className="flex-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
-        <div className="relative bg-black rounded-lg overflow-hidden">
-          <video
-            ref={localVideoRef}
-            autoPlay
-            playsInline
-            muted
-            className="w-full h-full object-cover"
-          />
-          <div className="absolute bottom-4 left-4 text-white bg-gray-800 px-2 py-1 rounded-md">
-            You
-          </div>
-        </div>
-        {Array.from(remoteStreams).map(([userId, stream]) => (
-          <div key={userId} className="relative bg-black rounded-lg overflow-hidden">
+    <div className="h-screen bg-gray-900 flex flex-col relative">
+      <div className="flex flex-1 overflow-hidden">
+       
+        <div className="flex-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4 overflow-y-auto">
+          <div className="relative bg-black rounded-lg overflow-hidden">
             <video
+              ref={localVideoRef}
               autoPlay
               playsInline
+              muted
               className="w-full h-full object-cover"
-              ref={el => {
-                if (el) el.srcObject = stream;
-              }}
             />
             <div className="absolute bottom-4 left-4 text-white bg-gray-800 px-2 py-1 rounded-md">
-              Participant
+              HOST
             </div>
           </div>
-        ))}
+          {Array.from(remoteStreams).map(([userId, stream],index) => (
+            <div key={userId} className="relative bg-black rounded-lg overflow-hidden">
+              <video
+                autoPlay
+                playsInline
+                className="w-full h-full object-cover"
+                ref={el => {
+                  if (el) el.srcObject = stream;
+                }}
+              />
+              <div className="absolute bottom-4 left-4 text-white bg-gray-800 px-2 py-1 rounded-md" id='chatname'>
+                {`Participants ${index + 1}`}
+              </div>
+            </div>
+            ))}
+         
+        </div>
+
+  
+        {isChatOpen && (
+          <div className="w-80 bg-gray-800 p-4 overflow-y-auto flex flex-col">
+            <h2 className="text-white mb-4">Chat</h2>
+            <div className="flex-1 space-y-2 overflow-y-auto">
+              {chatMessages.map((chat, index) => (
+                <div key={index} className="text-white">
+                  <strong>{chat.user}: </strong>{chat.message}
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 flex">
+              <input
+                type="text"
+                id='chats'
+                placeholder="Type a message..."
+                value={chatMessage}
+                onChange={(e) => setChatMessage(e.target.value)}
+                className="flex-1 p-2 rounded-l-md focus:outline-none"
+              />
+              <button
+                onClick={handleSendMessage}
+                className="p-2 bg-blue-600 text-white rounded-r-md"
+              >
+                <FaPaperPlane />
+              </button>
+            </div>
+          </div>
+        )}
+     
+      </div>
+  
+
+      <div className="bg-gray-800 p-4 flex justify-center items-center">
+      <div className="flex space-x-8 items-center">
+        <button
+          onClick={toggleAudio}
+          className={`p-4 rounded-full ${isMuted ? 'bg-red-500' : 'bg-gray-600'} hover:bg-opacity-80`}
+        >
+          {isMuted ? <FaMicrophoneSlash className="text-white" /> : <FaMicrophone className="text-white" />}
+        </button>
+
+        <button
+          onClick={toggleVideo}
+          className={`p-4 rounded-full ${isVideoOff ? 'bg-red-500' : 'bg-gray-600'} hover:bg-opacity-80`}
+        >
+          {isVideoOff ? <FaVideoSlash className="text-white" /> : <FaVideo className="text-white" />}
+        </button>
+
+        <button
+          onClick={endCall}
+          className="p-4 rounded-full bg-red-500 hover:bg-red-600"
+        >
+          <FaPhone className="text-white transform rotate-225" />
+        </button>
       </div>
 
-      <div className="bg-gray-800 p-4">
-        <div className="max-w-3xl mx-auto flex items-center justify-center space-x-4">
-          <button
-            onClick={toggleAudio}
-            className={`p-4 rounded-full ${isMuted ? 'bg-red-500' : 'bg-gray-600'} hover:bg-opacity-80`}
-          >
-            {isMuted ? <FaMicrophoneSlash className="text-white" /> : <FaMicrophone className="text-white" />}
-          </button>
-          <button
-            onClick={toggleVideo}
-            className={`p-4 rounded-full ${isVideoOff ? 'bg-red-500' : 'bg-gray-600'} hover:bg-opacity-80`}
-          >
-            {isVideoOff ? <FaVideoSlash className="text-white" /> : <FaVideo className="text-white" />}
-          </button>
-          <button
-            onClick={endCall}
-            className="p-4 rounded-full bg-red-500 hover:bg-red-600"
-          >
-            <FaPhone className="text-white transform rotate-225" />
-          </button>
-        
-        </div>
-      </div>
+      <button
+        onClick={() => setIsChatOpen(!isChatOpen)}
+        className="p-4 bg-gray-600 hover:bg-gray-700 rounded-md ml-4"
+      >
+        <FaEllipsisV className="text-white" />
+      </button>
     </div>
+  </div>
   );
 };
 
