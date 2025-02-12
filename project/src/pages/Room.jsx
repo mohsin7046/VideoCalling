@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { FaMicrophone, FaMicrophoneSlash, FaVideo, FaVideoSlash, FaPhone, FaLink, FaPaperPlane, FaEllipsisV } from 'react-icons/fa';
+import { FaMicrophone, FaMicrophoneSlash, FaVideo, FaVideoSlash, FaPhone, FaPaperPlane, FaEllipsisV } from 'react-icons/fa';
 import { io } from 'socket.io-client';
 
 const socket = io(import.meta.env.VITE_PORT);
@@ -19,13 +19,14 @@ const Room = () => {
   const [isMuted, setIsMuted] = useState(JSON.parse(localStorage.getItem('isMuted')) || false);
   const [isVideoOff, setIsVideoOff] = useState(JSON.parse(localStorage.getItem('isVideoOff')) || false);
   const [isChatOpen, setIsChatOpen] = useState(false);
-  const [chatMessage, setChatMessage] = useState('');
   const [chatMessages, setChatMessages] = useState([]);
   const localVideoRef = useRef();
   const [remoteStreams, setRemoteStreams] = useState(new Map());
   const peerConnections = useRef(new Map());
   const localStreamRef = useRef(null);
 
+  const chat = useRef('');
+  const name  = useRef('');
   const createPeerConnection = (userId, stream) => {
     const peerConnection = new RTCPeerConnection(configuration);
     peerConnections.current.set(userId, peerConnection);
@@ -162,14 +163,14 @@ const Room = () => {
     peerConnections.current.forEach(connection => connection.close());
     navigate('/');
   };
-
   const handleSendMessage = () => {
-    const name = document.getElementById('chatname').textContent;
-    if (chatMessage.trim()) {
-      const newMessage = { user: name, message: chatMessage };
+    name.current = document.getElementById('chatname').textContent;
+    chat.current = document.getElementById('chats').value;
+    if (chat.current !== '') {
+      const newMessage = { user: name.current, message: chat.current };
       setChatMessages(prevMessages => [...prevMessages, newMessage]);
       socket.emit('send-message', { roomId, message: newMessage });
-      setChatMessage('');
+      document.getElementById('chats').value = '';
     }
   };
 
@@ -230,8 +231,6 @@ const Room = () => {
                 type="text"
                 id='chats'
                 placeholder="Type a message..."
-                value={chatMessage}
-                onChange={(e) => setChatMessage(e.target.value)}
                 className="flex-1 p-2 rounded-l-md focus:outline-none"
               />
               <button
